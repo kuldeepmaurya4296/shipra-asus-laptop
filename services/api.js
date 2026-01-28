@@ -1,5 +1,5 @@
 // Basic wrapper for fetch API
-const API_URL = 'http://192.168.29.92:5000/api'; // Replace with your local IP if needed
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 export const api = {
     async get(endpoint) {

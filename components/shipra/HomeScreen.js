@@ -1,7 +1,10 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+import MapView, { Marker } from 'react-native-maps';
 import Animated, {
     Easing,
     useAnimatedStyle,
@@ -9,14 +12,17 @@ import Animated, {
     withRepeat,
     withTiming
 } from 'react-native-reanimated';
+
 import { ShipraColors } from '../../constants/theme';
 import { api, endpoints } from '../../services/api';
 
 const { width } = Dimensions.get('window');
 
-export default function HomeScreen({ onNext }) {
+export default function HomeScreen({ onNext, user }) {
     const [birds, setBirds] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [userLocation, setUserLocation] = useState(null);
+    const [errorMsg, setErrorMsg] = useState(null);
 
     const mapScale = useSharedValue(1);
     const mapOpacity = useSharedValue(0.3);
@@ -24,7 +30,6 @@ export default function HomeScreen({ onNext }) {
 
     const fetchData = async () => {
         setLoading(true);
-        // In a real app, you'd get the user's location coordinates first
         const availableBirds = await api.get(endpoints.birds);
         if (availableBirds) {
             setBirds(availableBirds);
@@ -33,8 +38,26 @@ export default function HomeScreen({ onNext }) {
     };
 
     useEffect(() => {
+        // Location Logic
+        (async () => {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                setErrorMsg('Permission to access location was denied');
+                return;
+            }
+
+            let location = await Location.getCurrentPositionAsync({});
+            setUserLocation({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+            });
+        })();
+
         fetchData();
 
+        // Animations
         mapScale.value = withRepeat(
             withTiming(1.2, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
             -1,
@@ -76,32 +99,66 @@ export default function HomeScreen({ onNext }) {
                 colors={['rgba(0, 71, 171, 0.1)', 'transparent']}
                 style={styles.header}
             >
-                <Text style={styles.greeting}>Hey, Traveler!</Text>
+                <Text style={styles.greeting}>Hey, {user ? user.name.split(' ')[0] : 'Traveler'}!</Text>
                 <View style={styles.locationContainer}>
                     <Feather name="map-pin" size={14} color={ShipraColors.primary} />
-                    <Text style={styles.locationText}>Current Location: Downtown Airport</Text>
+                    <Text style={styles.locationText}>
+                        {errorMsg ? 'Location Denied' : (userLocation ? 'Current Location Found' : 'Locating...')}
+                    </Text>
                 </View>
             </LinearGradient>
 
-            {/* Map Placeholder */}
-            <TouchableOpacity activeOpacity={0.9} style={styles.mapCard}>
-                <LinearGradient
-                    colors={['rgba(0, 71, 171, 0.05)', 'rgba(26, 54, 93, 0.1)', 'rgba(0, 71, 171, 0.05)']}
+            {/* Map Placeholder -> Real Map */}
+            <View style={styles.mapCard}>
+                <MapView
+                    provider={PROVIDER_GOOGLE}
                     style={StyleSheet.absoluteFill}
-                />
+                    region={userLocation || {
+                        latitude: 28.6139,
+                        longitude: 77.2090,
+                        latitudeDelta: 0.05,
+                        longitudeDelta: 0.05,
+                    }}
+                    customMapStyle={[
+                        {
+                            "featureType": "all",
+                            "elementType": "geometry",
+                            "stylers": [{ "color": "#f5f5f5" }] // Light grey map
+                        }
+                    ]}
+                >
+                    {/* User Location */}
+                    {userLocation && (
+                        <Marker coordinate={userLocation} title="You">
+                            <View style={styles.userMarker}>
+                                <View style={styles.userMarkerInner} />
+                            </View>
+                        </Marker>
+                    )}
 
-                <Animated.View style={[styles.mapCircle, mapCircleStyle]} />
-                <Animated.View style={[styles.mapCircleOuter, { transform: [{ scale: 1.4 }] }]} />
+                    {/* Nearby Birds */}
+                    {birds.map((bird, index) => (
+                        <Marker
+                            key={index}
+                            coordinate={{
+                                latitude: bird.lat,
+                                longitude: bird.lng
+                            }}
+                            title={bird.model}
+                            description={`Battery: ${bird.battery}%`}
+                        >
+                            <Animated.View style={styles.birdMarker}>
+                                <MaterialCommunityIcons name="airplane" size={20} color="white" />
+                            </Animated.View>
+                        </Marker>
+                    ))}
+                </MapView>
 
-                <View style={styles.mapContent}>
-                    <Text style={styles.mapEmoji}>🗺️</Text>
-                    <Text style={styles.mapSubtext}>Live Location Map</Text>
+                {/* Overlay Pulse */}
+                <View style={styles.pulseContainer} pointerEvents="none">
+                    <Text style={styles.liveText}>LIVE</Text>
                 </View>
-
-                <View style={styles.pulseContainer}>
-                    <View style={styles.pulseCircle} />
-                </View>
-            </TouchableOpacity>
+            </View>
 
             {/* Availability Card */}
             {loading ? (
@@ -221,6 +278,7 @@ const styles = StyleSheet.create({
         height: 12,
         borderRadius: 6,
         backgroundColor: ShipraColors.primary,
+        display: 'none', // Removed deprecated visual
     },
     availCard: {
         margin: 20,
@@ -300,5 +358,42 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: 'white',
+    },
+    userMarker: {
+        width: 24,
+        height: 24,
+        backgroundColor: 'rgba(0, 71, 171, 0.3)',
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    userMarkerInner: {
+        width: 12,
+        height: 12,
+        backgroundColor: ShipraColors.primary,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: 'white',
+    },
+    birdMarker: {
+        width: 32,
+        height: 32,
+        backgroundColor: ShipraColors.accent,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: 'white',
+        elevation: 4,
+    },
+    liveText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: 'red',
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        overflow: 'hidden',
     },
 });

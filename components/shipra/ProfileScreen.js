@@ -26,7 +26,7 @@ const menuItems = [
     },
 ];
 
-export default function ProfileScreen({ onLogout }) {
+export default function ProfileScreen({ user, onLogout }) {
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
             {/* Profile Header */}
@@ -40,10 +40,10 @@ export default function ProfileScreen({ onLogout }) {
                         colors={[ShipraColors.primary, ShipraColors.accent]}
                         style={styles.avatarGradient}
                     />
-                    <Text style={styles.avatarText}>KM</Text>
+                    <Text style={styles.avatarText}>{user?.name?.[0] || 'G'}</Text>
                 </View>
-                <Text style={styles.name}>Kuldeep Maurya</Text>
-                <Text style={styles.email}>kuldeep.maurya@example.com</Text>
+                <Text style={styles.name}>{user?.name || 'Guest User'}</Text>
+                <Text style={styles.email}>{user?.email || user?.phone || 'No contact info'}</Text>
 
                 {/* Stats Row */}
                 <View style={styles.statsRow}>

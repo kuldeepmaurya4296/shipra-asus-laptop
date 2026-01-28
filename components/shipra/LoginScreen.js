@@ -1,20 +1,160 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Google from 'expo-auth-session/providers/google';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ShipraColors } from '../../constants/theme';
-import { api, endpoints } from '../../services/api';
+import { api } from '../../services/api';
 
-export default function LoginScreen({ onNext }) {
-    const handleLogin = async () => {
-        // Simulate login call
-        const response = await api.post(endpoints.login, { phone: '9999999999' });
-        if (response && response.success) {
-            onNext();
-        } else {
-            Alert.alert('Login', 'Connecting to server failed. Ensure backend is running.', [
-                { text: 'Continue Demo Mode', onPress: onNext }
-            ]);
+WebBrowser.maybeCompleteAuthSession();
+
+export default function LoginScreen({ onLogin }) { // Renamed onNext to onLogin to match prop
+    const onNext = onLogin; // Alias for backward compatibility if inside code uses onNext
+    const [view, setView] = useState('default'); // default, phone, otp
+    const [phone, setPhone] = useState('');
+    const [otp, setOtp] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    // Google Auth Request
+    const [request, response, promptAsync] = Google.useAuthRequest({
+        androidClientId: "335043356153-lco9888k3135mabo720ao4s61ln545vh.apps.googleusercontent.com",
+        webClientId: "335043356153-lg7nsilj82qrptn2oqg5nu0sgib8q42u.apps.googleusercontent.com",
+        // iosClientId: "...", // Add if needed
+    });
+
+    useEffect(() => {
+        if (response?.type === 'success') {
+            const { authentication } = response;
+            verifyGoogleToken(authentication.accessToken);
         }
+    }, [response]);
+
+    const verifyGoogleToken = async (token) => {
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/google', { token });
+            setLoading(false);
+            if (res && res.success) {
+                onNext({ user: res.user, token: res.token });
+            } else {
+                Alert.alert('Login Failed', res?.message || 'Google Auth Error');
+            }
+        } catch (e) {
+            setLoading(false);
+            Alert.alert('Error', 'Network error during Google Login');
+        }
+    };
+
+    const handleGoogleLogin = async () => {
+        await promptAsync();
+    };
+
+    const handleSendOtp = async () => {
+        if (phone.length < 10) return Alert.alert('Error', 'Please enter a valid phone number');
+
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/whatsapp/send', { phone });
+            setLoading(false);
+            if (res && res.success) {
+                setView('otp');
+            } else {
+                Alert.alert('Error', res?.message || 'Failed to send OTP');
+            }
+        } catch (e) {
+            setLoading(false);
+            Alert.alert('Error', 'Network error');
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        if (otp.length < 4) return Alert.alert('Error', 'Please enter the code');
+
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/whatsapp/verify', { phone, code: otp });
+            setLoading(false);
+            if (res && res.success) {
+                // Pass full user object to parent
+                onNext({ user: res.user, token: res.token });
+            } else {
+                Alert.alert('Failed', res?.message || 'Invalid Code');
+            }
+        } catch (e) {
+            setLoading(false);
+            Alert.alert('Error', 'Network error');
+        }
+    };
+
+    const renderContent = () => {
+        if (view === 'phone') {
+            return (
+                <View style={styles.formContainer}>
+                    <Text style={styles.formTitle}>Enter WhatsApp Number</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="+91 99999 99999"
+                        keyboardType="phone-pad"
+                        value={phone}
+                        onChangeText={setPhone}
+                        placeholderTextColor="#999"
+                    />
+                    <TouchableOpacity style={styles.primaryButton} onPress={handleSendOtp} disabled={loading}>
+                        {loading ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>Send Code</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setView('default')} style={styles.backLink}>
+                        <Text style={styles.backLinkText}>Go Back</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        if (view === 'otp') {
+            return (
+                <View style={styles.formContainer}>
+                    <Text style={styles.formTitle}>Verify OTP</Text>
+                    <Text style={styles.formSubtitle}>Sent to {phone}</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="123456"
+                        keyboardType="number-pad"
+                        value={otp}
+                        onChangeText={setOtp}
+                        placeholderTextColor="#999"
+                        maxLength={6}
+                    />
+                    <TouchableOpacity style={styles.primaryButton} onPress={handleVerifyOtp} disabled={loading}>
+                        {loading ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>Verify & Login</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setView('phone')} style={styles.backLink}>
+                        <Text style={styles.backLinkText}>Change Number</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.options}>
+                <TouchableOpacity
+                    style={styles.googleButton}
+                    onPress={handleGoogleLogin}
+                    activeOpacity={0.7}
+                >
+                    <Feather name="chrome" color={ShipraColors.text} size={24} />
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.otpButton}
+                    onPress={() => setView('phone')}
+                    activeOpacity={0.7}
+                >
+                    <MaterialCommunityIcons name="whatsapp" color="white" size={24} />
+                    <Text style={styles.otpButtonText}>WhatsApp OTP Login</Text>
+                </TouchableOpacity>
+            </View>
+        );
     };
 
     return (
@@ -32,44 +172,28 @@ export default function LoginScreen({ onNext }) {
 
             {/* Content */}
             <View style={styles.content}>
-                {/* Illustration placeholder */}
-                <View style={styles.illustration}>
-                    <LinearGradient
-                        colors={['rgba(0, 71, 171, 0.1)', 'rgba(255, 165, 0, 0.1)']}
-                        style={styles.illustrationGradient}
-                    />
-                    <View style={styles.iconContainer}>
-                        <MaterialCommunityIcons name="airplane" color={ShipraColors.primary} size={64} />
+                {view === 'default' && (
+                    <View style={styles.illustration}>
+                        <LinearGradient
+                            colors={['rgba(0, 71, 171, 0.1)', 'rgba(255, 165, 0, 0.1)']}
+                            style={styles.illustrationGradient}
+                        />
+                        <View style={styles.iconContainer}>
+                            <MaterialCommunityIcons name="airplane" color={ShipraColors.primary} size={64} />
+                        </View>
                     </View>
-                </View>
+                )}
 
-                {/* Login Options */}
-                <View style={styles.options}>
-                    <TouchableOpacity
-                        style={styles.googleButton}
-                        onPress={handleLogin}
-                        activeOpacity={0.7}
-                    >
-                        <Feather name="chrome" color={ShipraColors.text} size={24} />
-                        <Text style={styles.googleButtonText}>Continue with Google</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.otpButton}
-                        onPress={handleLogin}
-                        activeOpacity={0.7}
-                    >
-                        <Feather name="message-circle" color={ShipraColors.primary} size={24} />
-                        <Text style={styles.otpButtonText}>WhatsApp OTP Login</Text>
-                    </TouchableOpacity>
-                </View>
+                {renderContent()}
 
                 {/* Terms */}
-                <Text style={styles.terms}>
-                    By continuing, you agree to our{' '}
-                    <Text style={styles.link}>Terms</Text> and{' '}
-                    <Text style={styles.link}>Privacy</Text>
-                </Text>
+                {view === 'default' && (
+                    <Text style={styles.terms}>
+                        By continuing, you agree to our{' '}
+                        <Text style={styles.link}>Terms</Text> and{' '}
+                        <Text style={styles.link}>Privacy</Text>
+                    </Text>
+                )}
             </View>
 
             {/* Footer */}
@@ -179,5 +303,48 @@ const styles = StyleSheet.create({
     footerText: {
         fontSize: 14,
         color: ShipraColors.muted,
+    },
+    formContainer: {
+        gap: 16,
+    },
+    formTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: ShipraColors.text,
+    },
+    formSubtitle: {
+        fontSize: 14,
+        color: ShipraColors.muted,
+        marginBottom: 8,
+    },
+    input: {
+        height: 60,
+        backgroundColor: 'white',
+        borderRadius: 16,
+        paddingHorizontal: 20,
+        fontSize: 18,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        color: ShipraColors.text,
+    },
+    primaryButton: {
+        height: 60,
+        backgroundColor: '#25D366', // WhatsApp Green
+        borderRadius: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    primaryButtonText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    backLink: {
+        alignItems: 'center',
+        padding: 10,
+    },
+    backLinkText: {
+        color: ShipraColors.muted,
+        fontSize: 14,
     },
 });

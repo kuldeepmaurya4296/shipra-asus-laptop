@@ -4,13 +4,14 @@ import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } 
 import { ShipraColors } from '../../constants/theme';
 import { api, endpoints } from '../../services/api';
 
-export default function HistoryScreen() {
+export default function HistoryScreen({ user }) {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const fetchHistory = async () => {
+        if (!user) return;
         setLoading(true);
-        const data = await api.get(endpoints.history);
+        const data = await api.get(`${endpoints.history}?userId=${user.id || user._id}`);
         if (data) {
             setBookings(data);
         }

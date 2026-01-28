@@ -14,27 +14,28 @@ import { ShipraColors } from '../constants/theme';
 
 export default function ShipraUI() {
     const [currentScreen, setCurrentScreen] = useState('splash');
+    const [user, setUser] = useState(null); // Store logged in user { id, name, token }
 
     const renderScreen = () => {
         switch (currentScreen) {
             case 'splash':
                 return <SplashScreen onNext={() => setCurrentScreen('login')} />;
             case 'login':
-                return <LoginScreen onNext={() => setCurrentScreen('home')} />;
+                return <LoginScreen onLogin={(userData) => { setUser(userData.user); setCurrentScreen('home'); }} />;
             case 'home':
-                return <HomeScreen onNext={() => setCurrentScreen('booking')} />;
+                return <HomeScreen user={user} onNext={() => setCurrentScreen('booking')} />;
             case 'booking':
-                return <BookingScreen onNext={() => setCurrentScreen('ride-status')} />;
+                return <BookingScreen user={user} onNext={() => setCurrentScreen('ride-status')} />;
             case 'ride-status':
-                return <RideStatusScreen onNext={() => setCurrentScreen('ride-progress')} />;
+                return <RideStatusScreen user={user} onNext={() => setCurrentScreen('ride-progress')} />;
             case 'ride-progress':
-                return <RideInProgressScreen onNext={() => setCurrentScreen('summary')} />;
+                return <RideInProgressScreen user={user} onNext={() => setCurrentScreen('summary')} />;
             case 'summary':
-                return <RideSummaryScreen onNext={() => setCurrentScreen('home')} />;
+                return <RideSummaryScreen user={user} onNext={() => setCurrentScreen('home')} />;
             case 'history':
-                return <HistoryScreen />;
+                return <HistoryScreen user={user} />;
             case 'profile':
-                return <ProfileScreen onLogout={() => setCurrentScreen('login')} />;
+                return <ProfileScreen user={user} onLogout={() => { setUser(null); setCurrentScreen('login'); }} />;
             default:
                 return <SplashScreen onNext={() => setCurrentScreen('login')} />;
         }
@@ -60,7 +61,7 @@ export default function ShipraUI() {
                         style={styles.navItem}
                         onPress={() => setCurrentScreen('history')}
                     >
-                        <Feather name="history" size={24} color={currentScreen === 'history' ? ShipraColors.primary : ShipraColors.muted} />
+                        <Feather name="clock" size={24} color={currentScreen === 'history' ? ShipraColors.primary : ShipraColors.muted} />
                         <Text style={[styles.navText, currentScreen === 'history' && styles.navTextActive]}>History</Text>
                     </TouchableOpacity>
 
@@ -104,6 +105,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: -10 },
         shadowOpacity: 0.1,
         shadowRadius: 10,
+        zIndex: 1000,
     },
     navItem: {
         alignItems: 'center',

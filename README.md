@@ -1,51 +1,88 @@
-# Welcome to your Expo app 👋
+# Shipra Mobile - Future of Air Mobility
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Welcome to the Shipra Mobile application repository. This project is a comprehensive air mobility booking platform built with React Native (Expo) and a Node.js/Express backend.
 
-## Get started
+## About
 
-1. Install dependencies
+Shipra is designed to revolutionize urban air mobility by providing a seamless booking experience for users. The application integrates advanced mapping, secure authentication, and real-time booking capabilities.
 
-   ```bash
-   npm install
-   ```
+**Key Features:**
+- **Smart Booking System:** Easy-to-use interface for scheduling and managing trips.
+- **Interactive Maps:** Real-time route visualization using Google Maps integration.
+- **Secure Authentication:** Support for Google Sign-In and OTP-based authentication.
+- **Payment Integration:** Secure payment processing via Razorpay.
+- **User Profiles:** manage personal information and booking history.
 
-2. Start the app
+## Project Structure
 
-   ```bash
-   npx expo start
-   ```
+The project is organized as follows:
+- `app/`: Frontend application code (Expo Router).
+- `backend/`: Node.js Express server, API routes, and database models.
+- `components/`: Reusable React Native components.
+- `assets/`: Images, fonts, and other static resources.
 
-In the output, you'll find options to open the app in a
+## Prerequisites
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Before you begin, ensure you have the following installed:
+- [Node.js](https://nodejs.org/)
+- [npm](https://www.npmjs.com/) (usually comes with Node.js)
+- [Expo Go](https://expo.dev/client) app on your mobile device (Android/iOS) or an emulator.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Getting Started
 
-## Get a fresh project
+Follow these steps to set up and run the application locally.
 
-When you're ready, run:
+### 1. Installation
 
+Clone the repository and install dependencies for both the frontend and backend.
+
+**Frontend:**
 ```bash
-npm run reset-project
+# Install root dependencies
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Backend:**
+```bash
+# Navigate to backend and install server dependencies
+cd backend
+npm install
+cd ..
+```
 
-## Learn more
+### 2. Environment Configuration
 
-To learn more about developing your project with Expo, look at the following resources:
+Ensure you have the necessary environment variables set up.
+- **Frontend:** Check `.env` in the root directory for API keys (e.g., Google Maps API Key).
+- **Backend:** Check `backend/.env` for server configurations (e.g., MongoDB URI, Payment Keys).
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 3. Running the Application
 
-## Join the community
+To fully run the application, you need to start both the backend server and the frontend Expo environment.
 
-Join our community of developers creating universal apps.
+**Step 1: Start the Backend Server**
+Open a terminal and run:
+```bash
+cd backend
+npm run dev
+```
+*This starts the server in watch mode.*
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-"# shipra-asus-laptop" 
+**Step 2: Start the Expo App**
+Open a second terminal window (keep the first one running) and run:
+```bash
+npx expo start
+```
+*This will display a QR code. Scan it with the Expo Go app on your phone, or press 'a' for Android emulator / 'i' for iOS simulator.*
+
+## Tech Stack
+
+- **Frontend:** React Native, Expo, Expo Router
+- **Backend:** Node.js, Express.js, MongoDB (Mongoose)
+- **Services:** Google Maps API, Google Auth, Razorpay, Twilio
+
+## Troubleshooting
+
+- **Map not visible?** Ensure your Google Maps API key is correctly set in your `.env` and `app.json`.
+- **Server connection issues?** Make sure your device/emulator is on the same network as your computer, and update the API base URL to your machine's local IP address if necessary.
+

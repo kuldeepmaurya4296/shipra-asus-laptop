@@ -5,6 +5,11 @@ const config = require('./config/env');
 const apiRoutes = require('./routes/api');
 
 const app = express();
+const connectDB = require('./config/db');
+
+// Connect to Database
+connectDB();
+
 
 // Middleware
 app.use(cors());

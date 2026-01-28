@@ -1,111 +1,142 @@
+const Booking = require('../models/Booking');
+const User = require('../models/User');
 const config = require('../config/env');
 
-const mockData = {
-    locations: [
-        { id: '1', name: 'Downtown Airport', lat: 28.6139, lng: 77.2090, available: true },
-        { id: '2', name: 'City Center Terminal', lat: 28.5562, lng: 77.1000, available: true },
-        { id: '3', name: 'Tech Park Hub', lat: 28.4595, lng: 77.0266, available: true },
-        { id: '4', name: 'Riverside Port', lat: 28.5828, lng: 77.2344, available: false },
-    ],
-    birds: [
-        { id: 'B42', model: 'eVTOL-X1', status: 'Ready', battery: 98, lat: 28.6145, lng: 77.2095 },
-        { id: 'B18', model: 'eVTOL-X1', status: 'Charging', battery: 45, lat: 28.5565, lng: 77.1005 },
-        { id: 'B99', model: 'eVTOL-Pro', status: 'Maintenance', battery: 10, lat: 28.4590, lng: 77.0260 },
-    ],
-    bookings: [], // In-memory storage for bookings
-    user: {
-        id: 'u1',
-        name: 'Kuldeep Maurya',
-        email: 'kuldeep.maurya@example.com',
-        rating: 4.8,
-        trips: 12,
-        status: 'Gold',
+const Location = require('../models/Location');
+const Bird = require('../models/Bird');
+
+exports.getLocations = async (req, res) => {
+    try {
+        const locations = await Location.find({});
+        res.json(locations);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching locations' });
     }
 };
 
-// --- Controllers ---
-
-exports.login = (req, res) => {
-    // Mock Login - in real app, verify OTP/Token
-    const { phone, email } = req.body;
-
-    setTimeout(() => {
-        res.json({
-            success: true,
-            token: 'mock-jwt-token-xyz-123',
-            user: mockData.user
-        });
-    }, config.mockDelay);
-};
-
-exports.getLocations = (req, res) => {
-    setTimeout(() => {
-        res.json(mockData.locations);
-    }, config.mockDelay);
-};
-
-exports.getAvailableBirds = (req, res) => {
-    const { locationId } = req.query;
-    // Simple filter simulation
-    const birds = mockData.birds.filter(b => b.status === 'Ready');
-
-    setTimeout(() => {
+exports.getAvailableBirds = async (req, res) => {
+    try {
+        const birds = await Bird.find({ status: 'Ready' }); // Only show ready birds? Or all? Let's show all for demo
         res.json(birds);
-    }, config.mockDelay);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching birds' });
+    }
 };
 
-exports.createBooking = (req, res) => {
-    const { fromId, toId, birdId } = req.body;
+const Razorpay = require('razorpay');
 
-    const booking = {
-        id: 'bk_' + Date.now(),
-        from: mockData.locations.find(l => l.id === fromId),
-        to: mockData.locations.find(l => l.id === toId),
-        birdId,
-        status: 'confirmed',
-        date: new Date().toISOString(),
-        cost: '3000',
-        currency: 'INR'
-    };
+// Create a new Booking - SAVES TO DB
+exports.createBooking = async (req, res) => {
+    try {
+        const { userId, fromId, toId, cost, distance } = req.body;
 
-    mockData.bookings.push(booking);
+        // Fetch names from DB or use ID if name lookup fails (for robustness)
+        const fromLocDoc = await Location.findById(fromId);
+        const toLocDoc = await Location.findById(toId);
 
-    setTimeout(() => {
-        res.json({ success: true, booking });
-    }, config.mockDelay);
+        const fromLoc = fromLocDoc ? fromLocDoc.name : 'Unknown Origin';
+        const toLoc = toLocDoc ? toLocDoc.name : 'Unknown Dest';
+        const amount = cost || 3000;
+
+        // Razorpay Integration
+        let razorpayOrder = null;
+        if (config.razorpayKeyId && config.razorpayKeySecret) {
+            const instance = new Razorpay({
+                key_id: config.razorpayKeyId,
+                key_secret: config.razorpayKeySecret,
+            });
+
+            razorpayOrder = await instance.orders.create({
+                amount: amount * 100, // amount in paise
+                currency: "INR",
+                receipt: `receipt_${Date.now()}`,
+            });
+        }
+
+        // Create booking in DB
+        const booking = await Booking.create({
+            userId: userId,
+            fromLocation: fromLoc,
+            toLocation: toLoc,
+            cost: amount,
+            distanceKm: distance || 12,
+            status: razorpayOrder ? 'pending_payment' : 'confirmed', // If payment integration active, keep pending
+            paymentId: razorpayOrder ? razorpayOrder.id : null
+        });
+
+        // Update User Trips count (Optional validation)
+        await User.findByIdAndUpdate(userId, { $inc: { trips: 1 } });
+
+        res.json({ success: true, booking, orderId: razorpayOrder ? razorpayOrder.id : null, keyId: config.razorpayKeyId });
+    } catch (error) {
+        console.error('Create Booking Error:', error);
+        res.status(500).json({ success: false, message: 'Booking Failed: ' + error.message });
+    }
 };
 
-exports.getBookingStatus = (req, res) => {
-    const { bookingId } = req.params;
-    // Simulate finding booking
-    const booking = mockData.bookings.find(b => b.id === bookingId) || {
-        id: bookingId,
-        status: 'in-progress',
-        eta_minutes: 4,
-        distance_remaining_km: 1.2,
-        current_altitude_m: 250,
-        speed_kmh: 95
-    };
+exports.getBookingStatus = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const booking = await Booking.findById(bookingId);
 
-    setTimeout(() => {
+        if (!booking) {
+            // Fallback for demo if id is fake
+            return res.json({
+                status: 'in-progress',
+                eta_minutes: 4,
+                distance_remaining_km: 1.2,
+                current_altitude_m: 250,
+                speed_kmh: 95
+            });
+        }
         res.json(booking);
-    }, config.mockDelay);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching status' });
+    }
 };
 
-exports.getUserHistory = (req, res) => {
-    const history = [
-        { id: '1', route: 'Downtown → Airport', date: 'Jan 20, 2024', cost: '₹3,000', status: 'completed' },
-        { id: '2', route: 'Airport → Garden', date: 'Jan 18, 2024', cost: '₹2,500', status: 'completed' },
-        { id: '3', route: 'Hotel → Downtown', date: 'Jan 16, 2024', cost: '₹3,500', status: 'completed' }
-    ];
+exports.getUserHistory = async (req, res) => {
+    try {
+        // In a real app, use req.user.id from middleware
+        // For now, allow passing userId via query or body for testing
+        const userId = req.query.userId;
+        if (!userId) {
+            // Return mock history if no user login context
+            return res.json([
+                { id: 'mock1', fromLocation: 'Downtown', toLocation: 'Airport', date: new Date(), cost: 3000, status: 'completed' }
+            ]);
+        }
 
-    setTimeout(() => {
+        const bookings = await Booking.find({ userId }).sort({ date: -1 });
+        // Format for UI
+        const history = bookings.map(b => ({
+            id: b._id,
+            route: `${b.fromLocation} → ${b.toLocation}`,
+            date: new Date(b.date).toDateString(),
+            cost: `₹${b.cost}`,
+            status: b.status
+        }));
+
         res.json(history);
-    }, config.mockDelay);
+    } catch (error) {
+        console.error('History Error:', error);
+        res.status(500).json({ message: 'Failed to fetch history' });
+    }
 };
 
-exports.getUserProfile = (req, res) => {
-    setTimeout(() => {
-        res.json(mockData.user);
-    }, config.mockDelay);
+exports.getUserProfile = async (req, res) => {
+    try {
+        const userId = req.query.userId;
+        if (!userId) return res.status(400).json({ message: 'User ID required' });
+
+        const user = await User.findById(userId);
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ message: 'Profile Error' });
+    }
+};
+
+// Legacy Login (Keep for backward compat or remove)
+exports.login = (req, res) => {
+    res.status(400).json({ message: 'Use /auth/google or /auth/whatsapp endpoints' });
 };
